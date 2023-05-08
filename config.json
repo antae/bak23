@@ -1,0 +1,17 @@
+{
+	"dataset_path": "E:\\Datasets\\LaPa",
+	
+	"models_path": "E:\\MLModels\\bak23",
+	
+	"rgb_codes": [
+        [  0,   0,   0], [  0, 153, 255], [102, 255, 153], [  0, 204, 153],
+        [255, 255, 102], [255, 255, 204], [255, 153,   0], [255, 102, 255],
+        [102,   0,  51], [255, 204, 255], [255,   0, 102]
+    ],
+	
+	"classes": [
+        "background", "skin", "left eyebrow", "right eyebrow",
+        "left eye", "right eye", "nose", "upper lip", "inner mouth",
+        "lower lip", "hair"
+    ]
+}
