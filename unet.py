@@ -7,11 +7,11 @@ from tensorflow.keras.models import Model
 
 def conv_block(inputs, num_filters):
     x = Conv2D(num_filters, 3, padding="same")(inputs)
-    #x = BatchNormalization()(x)
+    x = BatchNormalization()(x)
     x = Activation("relu")(x)
 
     x = Conv2D(num_filters, 3, padding="same")(x)
-    #x = BatchNormalization()(x)
+    x = BatchNormalization()(x)
     x = Activation("relu")(x)
 
     return x
@@ -23,7 +23,7 @@ def encoder_block(inputs, num_filters):
 
 def decoder_block(inputs, skip, num_filters):
     x = Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(inputs)
-    #x = UpSampling2D(size=(2, 2), interpolation='nearest')(inputs)
+    x = UpSampling2D(size=(2, 2), interpolation='nearest')(inputs)
     x = Concatenate()([x, skip])
     x = conv_block(x, num_filters)
     return x

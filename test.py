@@ -8,16 +8,26 @@ from glob import glob
 from tqdm import tqdm
 import tensorflow as tf
 from sklearn.metrics import f1_score, jaccard_score
-from train import create_dir, load_dataset
+from utils import load_json, timestr, create_dir
 from tkinter import filedialog, Tk
-import time
-import json
 
 global image_h
 global image_w
 global num_classes
 global classes
 global rgb_codes
+
+def load_testset(path, dataset_params):
+    test_size = dataset_params["test_size"]
+
+    test_x = sorted(glob(os.path.join(path, "test", "images", "*.jpg")))
+    test_y = sorted(glob(os.path.join(path, "test", "labels", "*.png")))
+
+    if test_size != "All" and test_size >= 0 and test_size < len(test_x):
+        test_x = test_x[:test_size]
+        test_y = test_y[:test_size]
+
+    return (test_x, test_y)
 
 def input_model_path(initialdir):
     Tk().withdraw()
@@ -64,35 +74,36 @@ def save_results(image_x, mask, pred_uncert, pred, save_image_path):
     cv2.imwrite(save_image_path, cat_images)
 
 if __name__ == "__main__":
+    config = load_json("config.json")
+
     """ Seeding """
     np.random.seed(42)
     tf.random.set_seed(42)
 
-    f = open('config.json')  
-    config = json.load(f)
-    f.close()
-
-    """ Hyperparameters """
-    image_h = 224
-    image_w = 224
-    num_classes = 11
-
     """ Paths """
     dataset_path = config["dataset_path"]
     model_path = input_model_path(config["models_path"])
-    model_path_head = os.path.split(model_path)[0]
-    test_path = os.path.join(model_path_head, 'test' + time.strftime("%Y%m%d-%H%M%S"))
+    build_path = os.path.split(model_path)[0]
+    test_path = os.path.join(build_path, 'test' + timestr())
     results_path = os.path.join(test_path, 'results')
-    create_dir(results_path)
     score_path = os.path.join(test_path, 'score.csv')
+
+    create_dir(test_path)
+    create_dir(results_path)
+
+    """ Hyperparameters """
+    params = load_json(os.path.join(build_path, "params.json"))
+    image_h = params["image_h"]
+    image_w = params["image_w"]
+    num_classes = len(config["classes"])
 
     """ RGB Code and Classes """
     rgb_codes = config["rgb_codes"]
     classes = config["classes"]
 
     """ Loading the dataset """
-    (train_x, train_y), (valid_x, valid_y), (test_x, test_y) = load_dataset(dataset_path)
-    print(f"Train: {len(train_x)}/{len(train_y)} - Valid: {len(valid_x)}/{len(valid_y)} - Test: {len(test_x)}/{len(test_x)}")
+    (test_x, test_y) = load_testset(dataset_path, params["dataset"])
+    print(f"Test: {len(test_x)}/{len(test_x)}")
     print("")
 
     """ Load the model """
