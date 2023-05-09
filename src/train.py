@@ -136,7 +136,7 @@ if __name__ == "__main__":
 
     with tf.device('/GPU:0'):
         save_summary(build_path, model)
-        copy_file_to(params_path, build_path)
+        copy_file_to(params_path, os.path.join(build_path, "params.json"))
         model.fit(train_ds,
             validation_data=valid_ds,
             epochs=num_epochs,
