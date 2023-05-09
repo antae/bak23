@@ -8,8 +8,9 @@ from glob import glob
 from tqdm import tqdm
 import tensorflow as tf
 from sklearn.metrics import f1_score, jaccard_score
-from utils import load_json, timestr, create_dir
+from utils import load_json, timestr, create_dir, find_latest_model
 from tkinter import filedialog, Tk
+import argparse
 
 global image_h
 global image_w
@@ -73,6 +74,11 @@ def save_results(image_x, mask, pred_uncert, pred, save_image_path):
 
     cv2.imwrite(save_image_path, cat_images)
 
+parser = argparse.ArgumentParser()
+parser.add_argument('-m', '--model', type=str, default=None)
+parser.add_argument('-l', '--latest', action='store_true')
+args = parser.parse_args()
+
 if __name__ == "__main__":
     config = load_json("config.json")
 
@@ -82,7 +88,10 @@ if __name__ == "__main__":
 
     """ Paths """
     dataset_path = config["dataset_path"]
-    model_path = input_model_path(config["models_path"])
+    models_path = config["models_path"]
+    latest_path = find_latest_model(models_path) if args.latest else None
+    model_path = latest_path if latest_path else args.model if args.model != None and os.path.exists(args.model) else input_model_path(models_path)
+    
     build_path = os.path.split(model_path)[0]
     test_path = os.path.join(build_path, 'test' + timestr())
     results_path = os.path.join(test_path, 'results')
@@ -111,7 +120,10 @@ if __name__ == "__main__":
 
     """ Prediction & Evaluation """
     SCORE = []
-    for x, y in tqdm(zip(test_x, test_y), total=len(test_x)):
+    labels = [i for i in range(num_classes)]
+    test_results_size = params["dataset"]["test_results_size"]
+    test_results_size = test_results_size if test_results_size != "All" else len(test_x)
+    for i, [x, y] in enumerate(tqdm(zip(test_x, test_y), total=len(test_x))):
         """ Extract the name """
         name = x.split("\\")[-1].split(".")[0]
         #print(name)
@@ -135,14 +147,13 @@ if __name__ == "__main__":
         pred = pred.astype(np.int32)
 
         """ Save the results """
-        save_image_path = os.path.join(results_path, name + '.png')
-        save_results(image_x, mask, pred_uncert, pred, save_image_path)
+        if (i < test_results_size):
+            save_image_path = os.path.join(results_path, name + '.png')
+            save_results(image_x, mask, pred_uncert, pred, save_image_path)
 
         """ Flatten the array """
         mask = mask.flatten()
         pred = pred.flatten()
-
-        labels = [i for i in range(num_classes)]
 
         """ Calculating the metrics values """
         f1_value = f1_score(mask, pred, labels=labels, average=None, zero_division=0)

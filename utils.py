@@ -26,3 +26,14 @@ def save_summary(path, model):
         sys.stdout = f
         model.summary()
         sys.stdout = sys.__stdout__
+
+def find_latest_model(path):
+    import os
+    subdirs = next(os.walk(path))[1]
+    subdirs = [subdir for subdir in subdirs if subdir.startswith('build')]
+    sorted_subdirs = sorted(subdirs, reverse=True)
+    if sorted_subdirs:
+        new_path = os.path.join(os.path.join(path, sorted_subdirs[0]), "model.h5")
+        return new_path
+    else:
+        return None

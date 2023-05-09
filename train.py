@@ -8,6 +8,7 @@ import tensorflow as tf
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping, CSVLogger
 from unet import build_unet
 from utils import load_json, timestr, create_dir, copy_file_to, save_summary
+import argparse
 
 global image_h
 global image_w
@@ -67,6 +68,10 @@ def tf_dataset(X, Y, batch=8):
     ds = ds.batch(batch).prefetch(2)
     return ds
 
+parser = argparse.ArgumentParser()
+parser.add_argument('-p', '--params', type=str, default=None)
+args = parser.parse_args()
+
 if __name__ == "__main__":
     config = load_json("config.json")
 
@@ -84,7 +89,9 @@ if __name__ == "__main__":
     create_dir(build_path)
 
     """ Hyperparameters """
-    params = load_json("params.json")
+    params_path = args.params if args.params and os.path.exists(args.params) else "params.json"
+    params = load_json(params_path)
+
     image_h = params["image_h"]
     image_w = params["image_w"]
     num_classes = len(config["classes"])
@@ -129,7 +136,7 @@ if __name__ == "__main__":
 
     with tf.device('/GPU:0'):
         save_summary(build_path, model)
-        copy_file_to("params.json", build_path)
+        copy_file_to(params_path, build_path)
         model.fit(train_ds,
             validation_data=valid_ds,
             epochs=num_epochs,
