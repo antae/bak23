@@ -116,7 +116,14 @@ if __name__ == "__main__":
     print("")
 
     """ Load the model """
-    model = tf.keras.models.load_model(model_path)
+    
+    import segmentation_models as sm
+    custom_objects = {"iou_score": sm.metrics.IOUScore, "f1-score": sm.metrics.FScore, 
+                      "focal_loss_plus_dice_loss": sm.losses.categorical_focal_dice_loss,
+                      "focal_loss": sm.losses.categorical_focal_loss,
+                      "focal_loss_plus_jaccard_loss": sm.losses.categorical_focal_jaccard_loss}
+    with tf.keras.utils.custom_object_scope(custom_objects):
+        model = tf.keras.models.load_model(model_path)
 
     """ Prediction & Evaluation """
     SCORE = []

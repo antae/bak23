@@ -2,7 +2,7 @@
 	"image_h": 224,
     "image_w": 224,
     "num_classes": 11,
-    "batch_size": 2,
+    "batch_size": 4,
     "lr": 0.0001,
     "num_epochs": 5,
 	"loss": "categorical_crossentropy",
@@ -20,5 +20,5 @@
 		"min_lr": 0.0000001
 	},
 	
-	"describtion": "resunet_a_2d"
+	"describtion": "base unet_2d with VGG16"
 }
