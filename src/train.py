@@ -10,6 +10,7 @@ from unet import build_unet
 from utils import load_json, timestr, create_dir, copy_file_to, save_summary
 import argparse
 import segmentation_models as sm
+import random
 
 global image_h
 global image_w
@@ -19,9 +20,16 @@ def load_dataset(path, dataset_params):
     train_size = dataset_params["train_size"]
     valid_size = dataset_params["valid_size"]
 
-    train_x = sorted(glob(os.path.join(path, "train", "images", "*.jpg")))
+    #train_x = sorted(glob(os.path.join(path, "train", "images", "*.jpg")) + glob(os.path.join("E:\\Datasets\\croppedLaPa\\train\\images", "*.jpg")))
+    #train_y = sorted(glob(os.path.join(path, "train", "labels", "*.png")) + glob(os.path.join("E:\\Datasets\\croppedLaPa\\train\\labels", "*.png")))
+    #train_x = sorted(glob(os.path.join(path, "train", "images", "*.jpg")) + glob(os.path.join("E:\\Datasets\\patchedLaPa\\train\\images", "*.jpg")))
+    #train_y = sorted(glob(os.path.join(path, "train", "labels", "*.png")) + glob(os.path.join("E:\\Datasets\\patchedLaPa\\train\\labels", "*.png")))
+    train_x = sorted(glob(os.path.join("E:\\Datasets\\bilateralLaPa", "train", "bilateral_features", "*.jpg")))
+    #train_x = sorted(glob(os.path.join(path, "train", "images", "*.jpg")))
     train_y = sorted(glob(os.path.join(path, "train", "labels", "*.png")))
-    valid_x = sorted(glob(os.path.join(path, "val", "images", "*.jpg")))
+    
+    valid_x = sorted(glob(os.path.join("E:\\Datasets\\bilateralLaPa", "val", "bilateral_features", "*.jpg")))
+    #valid_x = sorted(glob(os.path.join(path, "val", "images", "*.jpg")))
     valid_y = sorted(glob(os.path.join(path, "val", "labels", "*.png")))
 
     if train_size != "All" and train_size >= 0 and train_size < len(train_x):
@@ -32,6 +40,52 @@ def load_dataset(path, dataset_params):
         valid_y = valid_y[:valid_size]
 
     return (train_x, train_y), (valid_x, valid_y)
+
+def add_noise(image):
+    noise = np.random.randint(0,50,(image_h, image_w))
+    zitter = np.zeros_like(image)
+    zitter[:,:,1] = noise  
+
+    image = cv2.add(image, zitter)
+    return image
+
+def read_image_mask_and_add_noise(x, y):
+    """ Image """
+    x = cv2.imread(x, cv2.IMREAD_COLOR)
+    x = cv2.resize(x, (image_w, image_h))
+    x = add_noise(x)
+    x = x/255.0
+    x = x.astype(np.float32)
+
+    """ Mask """
+    y = cv2.imread(y, cv2.IMREAD_GRAYSCALE)
+    y = cv2.resize(y, (image_w, image_h), interpolation=cv2.INTER_NEAREST)
+    y = y.astype(np.int32)
+
+    return x, y
+
+def add_transform(image, mask):
+    rand_num = random.randint(0, 9)
+    if rand_num < 7:
+        return image, mask
+    
+    rand_num = random.randint(0, 1)
+    if rand_num == 1:
+        image = cv2.flip(image, 1)
+        mask = cv2.flip(mask, 1)
+
+    rand_num = random.randint(0, 3)
+    rot = cv2.ROTATE_90_COUNTERCLOCKWISE
+    if rand_num == 1:
+        rot = cv2.ROTATE_180
+    elif rand_num == 2:
+        rot = cv2.ROTATE_90_CLOCKWISE
+
+    if rand_num != 3:
+        image = cv2.rotate(image, rot)
+        mask = cv2.rotate(mask, rot)
+
+    return image, mask
 
 def read_image_mask(x, y):
     """ Image """
@@ -51,7 +105,8 @@ def preprocess(x, y):
     def f(x, y):
         x = x.decode()
         y = y.decode()
-        return read_image_mask(x, y)
+        image, mask = read_image_mask(x, y)
+        return image, mask
 
     image, mask = tf.numpy_function(f, [x, y], [tf.float32, tf.int32])
     mask = tf.one_hot(mask, num_classes)
@@ -61,9 +116,25 @@ def preprocess(x, y):
 
     return image, mask
 
-def tf_dataset(X, Y, batch=8):
+def val_preprocess(x, y):
+    def f(x, y):
+        x = x.decode()
+        y = y.decode()
+        image, mask = read_image_mask(x, y)
+        return image, mask
+
+    image, mask = tf.numpy_function(f, [x, y], [tf.float32, tf.int32])
+    mask = tf.one_hot(mask, num_classes)
+
+    image.set_shape([image_h, image_w, 3])
+    mask.set_shape([image_h, image_w, num_classes])
+
+    return image, mask
+
+def tf_dataset(X, Y, batch=8, training=True):
     ds = tf.data.Dataset.from_tensor_slices((X, Y))
-    ds = ds.shuffle(buffer_size=5000).map(preprocess)
+    prep = preprocess if training else val_preprocess
+    ds = ds.shuffle(buffer_size=5000).map(prep)
     ds = ds.batch(batch).prefetch(2)
     return ds
 
@@ -110,8 +181,8 @@ if __name__ == "__main__":
     print("")
 
     """ Dataset Pipeline """
-    train_ds = tf_dataset(train_x, train_y, batch=batch_size)
-    valid_ds = tf_dataset(valid_x, valid_y, batch=batch_size)
+    train_ds = tf_dataset(train_x, train_y, batch=batch_size, training=True)
+    valid_ds = tf_dataset(valid_x, valid_y, batch=batch_size, training=False)
 
     """ Model """
     metrics = [sm.metrics.IOUScore(threshold=None), sm.metrics.FScore(threshold=None)]

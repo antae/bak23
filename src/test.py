@@ -24,7 +24,8 @@ global rgb_codes
 def load_testset(path, dataset_params):
     test_size = dataset_params["test_size"]
 
-    test_x = sorted(glob(os.path.join(path, "test", "images", "*.jpg")))
+    test_x = sorted(glob(os.path.join("E:\\Datasets\\bilateralLaPa", "test", "bilateral_features", "*.jpg")))
+    #test_x = sorted(glob(os.path.join(path, "test", "images", "*.jpg")))
     test_y = sorted(glob(os.path.join(path, "test", "labels", "*.png")))
 
     if test_size != "All" and test_size >= 0 and test_size < len(test_x):
