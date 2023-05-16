@@ -148,7 +148,7 @@ if __name__ == "__main__":
 
         """ Reading the mask """
         mask = cv2.imread(y, cv2.IMREAD_GRAYSCALE)
-        mask = cv2.resize(mask, (image_w, image_h))
+        mask = cv2.resize(mask, (image_w, image_h), interpolation=cv2.INTER_NEAREST)
         mask = mask.astype(np.int32)
 
         """ Prediction """
@@ -181,26 +181,20 @@ if __name__ == "__main__":
     score = np.array(SCORE)
     score = np.mean(score, axis=0)
 
-    display_labels = [
-        "fonas", "oda", "kair. antakis", "deš. antakis",
-        "kair. akis", "deš. akis", "nosis", "virš. lūpa", "vidinė burna",
-        "apat. lūpa", "plaukai"
-    ]
-
     cumulative_cm = cumulative_cm.astype(float)
     for row in cumulative_cm:
         s = sum(row)
         for i in range(len(row)):
             row[i] = round(row[i] / s, 2)
 
-    disp = ConfusionMatrixDisplay(confusion_matrix=cumulative_cm, display_labels=display_labels)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cumulative_cm, display_labels=classes)
     disp.plot() 
     disp.ax_.set(xlabel='Spėjamos klasės', ylabel='Klasės')
     plt.xticks(rotation=45, ha='right')
     plt.savefig(cm_path, dpi=300, bbox_inches='tight')
     plt.close()
 
-    f = open(score_path, "w")
+    f = open(score_path, "w", encoding='utf-8')
     f.write("Class,F1,Jaccard\n")
 
     l = ["Class", "F1", "Jaccard"]

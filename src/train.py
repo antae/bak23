@@ -42,7 +42,7 @@ def read_image_mask(x, y):
 
     """ Mask """
     y = cv2.imread(y, cv2.IMREAD_GRAYSCALE)
-    y = cv2.resize(y, (image_w, image_h))
+    y = cv2.resize(y, (image_w, image_h), interpolation=cv2.INTER_NEAREST)
     y = y.astype(np.int32)
 
     return x, y
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     valid_ds = tf_dataset(valid_x, valid_y, batch=batch_size)
 
     """ Model """
-    metrics = [sm.metrics.IOUScore(threshold=0.5), sm.metrics.FScore(threshold=0.5)]
+    metrics = [sm.metrics.IOUScore(threshold=None), sm.metrics.FScore(threshold=None)]
     model = build_unet(input_shape, num_classes)
     model.compile(
         loss=loss,
