@@ -25,13 +25,14 @@ def load_testset(path, dataset_params):
     test_size = dataset_params["test_size"]
 
     test_x = sorted(glob(os.path.join(path, "test", "images", "*.jpg")))
+    train_x2 = sorted(glob(os.path.join("E:\\Datasets\\hogLaPa", "test", "hog_features", "*.jpg")))
     test_y = sorted(glob(os.path.join(path, "test", "labels", "*.png")))
 
     if test_size != "All" and test_size >= 0 and test_size < len(test_x):
         test_x = test_x[:test_size]
         test_y = test_y[:test_size]
 
-    return (test_x, test_y)
+    return (test_x, train_x2, test_y)
 
 def input_model_path(initialdir):
     Tk().withdraw()
@@ -115,7 +116,7 @@ if __name__ == "__main__":
     classes = config["classes"]
 
     """ Loading the dataset """
-    (test_x, test_y) = load_testset(dataset_path, params["dataset"])
+    (test_x, test_x2, test_y) = load_testset(dataset_path, params["dataset"])
     print(f"Test: {len(test_x)}/{len(test_x)}")
     print("")
 
@@ -134,7 +135,7 @@ if __name__ == "__main__":
     test_results_size = params["dataset"]["test_results_size"]
     test_results_size = test_results_size if test_results_size != "All" else len(test_x)
     cumulative_cm = None
-    for i, [x, y] in enumerate(tqdm(zip(test_x, test_y), total=len(test_x))):
+    for i, [x, x2, y] in enumerate(tqdm(zip(test_x, test_x2, test_y), total=len(test_x))):
         """ Extract the name """
         name = x.split("\\")[-1].split(".")[0]
         #print(name)
@@ -143,8 +144,16 @@ if __name__ == "__main__":
         image = cv2.resize(image, (image_w, image_h))
         image_x = image
         image = image/255.0 ## (H, W, 3)
-        image = np.expand_dims(image, axis=0) ## [1, H, W, 3]
         image = image.astype(np.float32)
+
+        """ Filter """
+        x2 = cv2.imread(x2, cv2.IMREAD_GRAYSCALE)
+        x2 = cv2.resize(x2, (image_w, image_h), interpolation=cv2.INTER_NEAREST)
+        x2 = x2/255.0
+        x2 = x2.astype(np.float32)
+
+        image = np.dstack((image, x2))
+        image = np.expand_dims(image, axis=0) ## [1, H, W, 3]
 
         """ Reading the mask """
         mask = cv2.imread(y, cv2.IMREAD_GRAYSCALE)

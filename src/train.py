@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 from glob import glob
 import tensorflow as tf
-from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping, CSVLogger, TensorBoard
+from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping, CSVLogger, TensorBoard
 from unet import build_unet
 from utils import load_json, timestr, create_dir, copy_file_to, save_summary
 import argparse
@@ -20,25 +20,37 @@ def load_dataset(path, dataset_params):
     valid_size = dataset_params["valid_size"]
 
     train_x = sorted(glob(os.path.join(path, "train", "images", "*.jpg")))
+    train_x2 = sorted(glob(os.path.join("E:\\Datasets\\hogLaPa", "train", "hog_features", "*.jpg")))
     train_y = sorted(glob(os.path.join(path, "train", "labels", "*.png")))
     valid_x = sorted(glob(os.path.join(path, "val", "images", "*.jpg")))
+    valid_x2 = sorted(glob(os.path.join("E:\\Datasets\\hogLaPa", "val", "hog_features", "*.jpg")))
     valid_y = sorted(glob(os.path.join(path, "val", "labels", "*.png")))
 
     if train_size != "All" and train_size >= 0 and train_size < len(train_x):
         train_x = train_x[:train_size]
+        train_x2 = train_x2[:train_size]
         train_y = train_y[:train_size]
     if valid_size != "All" and valid_size >= 0 and valid_size < len(valid_x):
         valid_x = valid_x[:valid_size]
+        valid_x2 = valid_x2[:valid_size]
         valid_y = valid_y[:valid_size]
 
-    return (train_x, train_y), (valid_x, valid_y)
+    return (train_x, train_x2, train_y), (valid_x, valid_x2, valid_y)
 
-def read_image_mask(x, y):
+def read_image_mask(x, x2, y):
     """ Image """
     x = cv2.imread(x, cv2.IMREAD_COLOR)
     x = cv2.resize(x, (image_w, image_h))
     x = x/255.0
     x = x.astype(np.float32)
+
+    """ Filter """
+    x2 = cv2.imread(x2, cv2.IMREAD_GRAYSCALE)
+    x2 = cv2.resize(x2, (image_w, image_h), interpolation=cv2.INTER_NEAREST)
+    x2 = x2/255.0
+    x2 = x2.astype(np.float32)
+
+    x = np.dstack((x, x2))
 
     """ Mask """
     y = cv2.imread(y, cv2.IMREAD_GRAYSCALE)
@@ -47,22 +59,23 @@ def read_image_mask(x, y):
 
     return x, y
 
-def preprocess(x, y):
-    def f(x, y):
+def preprocess(x, x2, y):
+    def f(x, x2, y):
         x = x.decode()
+        x2 = x2.decode()
         y = y.decode()
-        return read_image_mask(x, y)
+        return read_image_mask(x, x2, y)
 
-    image, mask = tf.numpy_function(f, [x, y], [tf.float32, tf.int32])
+    image, mask = tf.numpy_function(f, [x, x2, y], [tf.float32, tf.int32])
     mask = tf.one_hot(mask, num_classes)
 
-    image.set_shape([image_h, image_w, 3])
+    image.set_shape([image_h, image_w, 4])
     mask.set_shape([image_h, image_w, num_classes])
 
     return image, mask
 
-def tf_dataset(X, Y, batch=8):
-    ds = tf.data.Dataset.from_tensor_slices((X, Y))
+def tf_dataset(X, X2, Y, batch=8):
+    ds = tf.data.Dataset.from_tensor_slices((X, X2, Y))
     ds = ds.shuffle(buffer_size=5000).map(preprocess)
     ds = ds.batch(batch).prefetch(2)
     return ds
@@ -94,7 +107,7 @@ if __name__ == "__main__":
     image_h = params["image_h"]
     image_w = params["image_w"]
     num_classes = len(config["classes"])
-    input_shape = (image_h, image_w, 3)
+    input_shape = (image_h, image_w, 4)
     batch_size = params["batch_size"]
     lr = params["lr"]
     num_epochs = params["num_epochs"]
@@ -105,13 +118,13 @@ if __name__ == "__main__":
     classes = config["classes"]
     
     """ Loading the dataset """
-    (train_x, train_y), (valid_x, valid_y) = load_dataset(dataset_path, params["dataset"])
+    (train_x, train_x2, train_y), (valid_x, valid_x2, valid_y) = load_dataset(dataset_path, params["dataset"])
     print(f"Train: {len(train_x)}/{len(train_y)} - Valid: {len(valid_x)}/{len(valid_y)}")
     print("")
 
     """ Dataset Pipeline """
-    train_ds = tf_dataset(train_x, train_y, batch=batch_size)
-    valid_ds = tf_dataset(valid_x, valid_y, batch=batch_size)
+    train_ds = tf_dataset(train_x, train_x2, train_y, batch=batch_size)
+    valid_ds = tf_dataset(valid_x, valid_x2, valid_y, batch=batch_size)
 
     """ Model """
     metrics = [sm.metrics.IOUScore(threshold=None), sm.metrics.FScore(threshold=None)]
