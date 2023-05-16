@@ -5,16 +5,15 @@ import numpy as np
 import cv2
 from glob import glob
 import tensorflow as tf
-from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping, CSVLogger
+from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping, CSVLogger, TensorBoard
 from unet import build_unet
 from utils import load_json, timestr, create_dir, copy_file_to, save_summary
 import argparse
+import segmentation_models as sm
 
 global image_h
 global image_w
 global num_classes
-global classes
-global rgb_codes
 
 def load_dataset(path, dataset_params):
     train_size = dataset_params["train_size"]
@@ -115,10 +114,12 @@ if __name__ == "__main__":
     valid_ds = tf_dataset(valid_x, valid_y, batch=batch_size)
 
     """ Model """
+    metrics = [sm.metrics.IOUScore(threshold=0.5), sm.metrics.FScore(threshold=0.5)]
     model = build_unet(input_shape, num_classes)
     model.compile(
         loss=loss,
-        optimizer=tf.keras.optimizers.Adam(lr)
+        optimizer=tf.keras.optimizers.Adam(lr),
+        metrics=metrics
     )
 
     """ Training """
@@ -131,7 +132,8 @@ if __name__ == "__main__":
                           min_lr=lr_params["min_lr"], 
                           verbose=1),
         CSVLogger(csv_path, append=True),
-        EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=False)
+        EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=False),
+        TensorBoard(log_dir=os.path.join(build_path, "buildlog"))
     ]
 
     with tf.device('/GPU:0'):

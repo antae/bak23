@@ -11,6 +11,9 @@ from sklearn.metrics import f1_score, jaccard_score
 from utils import load_json, timestr, create_dir, find_latest_model
 from tkinter import filedialog, Tk
 import argparse
+import segmentation_models as sm
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 global image_h
 global image_w
@@ -96,6 +99,7 @@ if __name__ == "__main__":
     test_path = os.path.join(build_path, 'test' + timestr())
     results_path = os.path.join(test_path, 'results')
     score_path = os.path.join(test_path, 'score.csv')
+    cm_path = os.path.join(test_path, 'confusion_matrix.png')
 
     create_dir(test_path)
     create_dir(results_path)
@@ -116,13 +120,20 @@ if __name__ == "__main__":
     print("")
 
     """ Load the model """
-    model = tf.keras.models.load_model(model_path)
+
+    custom_objects = {"iou_score": sm.metrics.IOUScore, "f1-score": sm.metrics.FScore, 
+                      "focal_loss_plus_dice_loss": sm.losses.categorical_focal_dice_loss,
+                      "focal_loss": sm.losses.categorical_focal_loss,
+                      "focal_loss_plus_jaccard_loss": sm.losses.categorical_focal_jaccard_loss}
+    with tf.keras.utils.custom_object_scope(custom_objects):
+        model = tf.keras.models.load_model(model_path)
 
     """ Prediction & Evaluation """
     SCORE = []
     labels = [i for i in range(num_classes)]
     test_results_size = params["dataset"]["test_results_size"]
     test_results_size = test_results_size if test_results_size != "All" else len(test_x)
+    cumulative_cm = None
     for i, [x, y] in enumerate(tqdm(zip(test_x, test_y), total=len(test_x))):
         """ Extract the name """
         name = x.split("\\")[-1].split(".")[0]
@@ -155,6 +166,12 @@ if __name__ == "__main__":
         mask = mask.flatten()
         pred = pred.flatten()
 
+        cm = confusion_matrix(mask, pred, labels=labels)
+        if cumulative_cm is None:
+            cumulative_cm = cm
+        else:
+            cumulative_cm = np.add(cumulative_cm, cm)
+
         """ Calculating the metrics values """
         f1_value = f1_score(mask, pred, labels=labels, average=None, zero_division=0)
         jac_value = jaccard_score(mask, pred, labels=labels, average=None, zero_division=0)
@@ -163,6 +180,25 @@ if __name__ == "__main__":
 
     score = np.array(SCORE)
     score = np.mean(score, axis=0)
+
+    display_labels = [
+        "fonas", "oda", "kair. antakis", "deš. antakis",
+        "kair. akis", "deš. akis", "nosis", "virš. lūpa", "vidinė burna",
+        "apat. lūpa", "plaukai"
+    ]
+
+    cumulative_cm = cumulative_cm.astype(float)
+    for row in cumulative_cm:
+        s = sum(row)
+        for i in range(len(row)):
+            row[i] = round(row[i] / s, 2)
+
+    disp = ConfusionMatrixDisplay(confusion_matrix=cumulative_cm, display_labels=display_labels)
+    disp.plot() 
+    disp.ax_.set(xlabel='Spėjamos klasės', ylabel='Klasės')
+    plt.xticks(rotation=45, ha='right')
+    plt.savefig(cm_path, dpi=300, bbox_inches='tight')
+    plt.close()
 
     f = open(score_path, "w")
     f.write("Class,F1,Jaccard\n")

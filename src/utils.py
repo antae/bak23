@@ -6,9 +6,8 @@ import time
 import shutil
 
 def load_json(path):
-    f = open(path)  
-    content = json.load(f)
-    f.close()
+    with open(path, encoding='utf-8') as f:
+        content = json.load(f)
     return content
 
 def timestr():

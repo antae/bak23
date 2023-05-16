@@ -2,7 +2,7 @@ import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 import tensorflow as tf
-from tensorflow.keras.layers import Conv2D, BatchNormalization, Activation, MaxPool2D, Conv2DTranspose, UpSampling2D, Concatenate, Input
+from tensorflow.keras.layers import Conv2D, BatchNormalization, Activation, MaxPool2D, Conv2DTranspose, UpSampling2D, Concatenate, Input, Dropout
 from tensorflow.keras.models import Model
 
 def conv_block(inputs, num_filters):

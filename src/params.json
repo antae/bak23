@@ -8,10 +8,10 @@
 	"loss": "categorical_crossentropy",
 	
 	"dataset": {
-		"train_size": 200,
-		"valid_size": 100,
-		"test_size": 100,
-		"test_results_size": 20
+		"train_size": "All",
+		"valid_size": "All",
+		"test_size": "All",
+		"test_results_size": 100
 	},
 	
 	"reduce_lr": {
@@ -20,5 +20,5 @@
 		"min_lr": 0.0000001
 	},
 	
-	"describtion": ""
+	"describtion": "unet with dropout 0.2"
 }
