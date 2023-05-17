@@ -4,7 +4,7 @@
     "num_classes": 11,
     "batch_size": 4,
     "lr": 0.0001,
-    "num_epochs": 30,
+    "num_epochs": 5,
 	"loss": "categorical_crossentropy",
 	
 	"dataset": {
@@ -20,5 +20,5 @@
 		"min_lr": 0.0000001
 	},
 	
-	"describtion": "base unet baseline"
+	"describtion": "unet_2d with ResNet101V2 and random weights"
 }

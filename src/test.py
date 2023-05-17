@@ -58,7 +58,7 @@ def grayscale_to_rgb(mask, rgb_codes):
     output = np.reshape(output, (h, w, 3))
     return output
 
-def save_results(image_x, mask, pred_uncert, pred, save_image_path):
+def save_results(image_x, mask, pred_uncert, pred):
     mask = np.expand_dims(mask, axis=-1)
     mask = grayscale_to_rgb(mask, rgb_codes)
 
@@ -75,7 +75,7 @@ def save_results(image_x, mask, pred_uncert, pred, save_image_path):
     cat_vert_images2 = np.concatenate([pred_uncert, vert_line, pred], axis=1)
     cat_images = np.concatenate([cat_vert_images1, hor_line, cat_vert_images2], axis=0)
 
-    cv2.imwrite(save_image_path, cat_images)
+    return cat_images
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-m', '--model', type=str, default=None)
@@ -98,11 +98,13 @@ if __name__ == "__main__":
     build_path = os.path.split(model_path)[0]
     test_path = os.path.join(build_path, 'test' + timestr())
     results_path = os.path.join(test_path, 'results')
+    bad_results_path = os.path.join(test_path, 'bad_results')
     score_path = os.path.join(test_path, 'score.csv')
     cm_path = os.path.join(test_path, 'confusion_matrix.png')
 
     create_dir(test_path)
     create_dir(results_path)
+    create_dir(bad_results_path)
 
     """ Hyperparameters """
     params = load_json(os.path.join(build_path, "params.json"))
@@ -134,6 +136,7 @@ if __name__ == "__main__":
     test_results_size = params["dataset"]["test_results_size"]
     test_results_size = test_results_size if test_results_size != "All" else len(test_x)
     cumulative_cm = None
+    bad_result_count = 0
     for i, [x, y] in enumerate(tqdm(zip(test_x, test_y), total=len(test_x))):
         """ Extract the name """
         name = x.split("\\")[-1].split(".")[0]
@@ -158,9 +161,11 @@ if __name__ == "__main__":
         pred = pred.astype(np.int32)
 
         """ Save the results """
+
+        result_image = save_results(image_x, mask, pred_uncert, pred)
         if (i < test_results_size):
             save_image_path = os.path.join(results_path, name + '.png')
-            save_results(image_x, mask, pred_uncert, pred, save_image_path)
+            cv2.imwrite(save_image_path, result_image)
 
         """ Flatten the array """
         mask = mask.flatten()
@@ -175,7 +180,12 @@ if __name__ == "__main__":
         """ Calculating the metrics values """
         f1_value = f1_score(mask, pred, labels=labels, average=None, zero_division=0)
         jac_value = jaccard_score(mask, pred, labels=labels, average=None, zero_division=0)
-        
+
+        if (np.mean(f1_value) <= 60 and bad_result_count < test_results_size):
+            save_image_path = os.path.join(bad_results_path, name + '.png')
+            cv2.imwrite(save_image_path, result_image)
+            bad_result_count += 1
+  
         SCORE.append([f1_value, jac_value])
 
     score = np.array(SCORE)

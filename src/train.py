@@ -1,5 +1,6 @@
 import os
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import numpy as np
 import cv2
@@ -10,6 +11,19 @@ from unet import build_unet
 from utils import load_json, timestr, create_dir, copy_file_to, save_summary
 import argparse
 import segmentation_models as sm
+from keras_unet_collection import models
+
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+            logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    except RuntimeError as e:
+        print(e)
+else:
+    print('Nothing to see here')
 
 global image_h
 global image_w
@@ -37,6 +51,7 @@ def read_image_mask(x, y):
     """ Image """
     x = cv2.imread(x, cv2.IMREAD_COLOR)
     x = cv2.resize(x, (image_w, image_h))
+
     x = x/255.0
     x = x.astype(np.float32)
 
@@ -69,10 +84,11 @@ def tf_dataset(X, Y, batch=8):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-p', '--params', type=str, default=None)
+parser.add_argument('-n', '--number', type=int)
 args = parser.parse_args()
 
 if __name__ == "__main__":
-    config = load_json("config.json")
+    config = load_json("C:\\Projects\\bak23\\src\\config.json")
 
     """ Seeding """
     np.random.seed(42)
@@ -88,7 +104,7 @@ if __name__ == "__main__":
     create_dir(build_path)
 
     """ Hyperparameters """
-    params_path = args.params if args.params and os.path.exists(args.params) else "params.json"
+    params_path = args.params if args.params and os.path.exists(args.params) else "C:\\Projects\\bak23\\src\\params.json"
     params = load_json(params_path)
 
     image_h = params["image_h"]
@@ -114,8 +130,128 @@ if __name__ == "__main__":
     valid_ds = tf_dataset(valid_x, valid_y, batch=batch_size)
 
     """ Model """
+    """
+    Input
+    ----------
+        input_tensor: the input tensor of the base, e.g., `keras.layers.Inpyt((None, None, 3))`.
+        filter_num: a list that defines the number of filters for each \
+                    down- and upsampling levels. e.g., `[64, 128, 256, 512]`.
+                    The depth is expected as `len(filter_num)`.
+        stack_num_down: number of convolutional layers per downsampling level/block. 
+        stack_num_up: number of convolutional layers (after concatenation) per upsampling level/block.
+        activation: one of the `tensorflow.keras.layers` or `keras_unet_collection.activations` interfaces, e.g., 'ReLU'.
+        batch_norm: True for batch normalization.
+        pool: True or 'max' for MaxPooling2D.
+              'ave' for AveragePooling2D.
+              False for strided conv + batch norm + activation.
+        unpool: True or 'bilinear' for Upsampling2D with bilinear interpolation.
+                'nearest' for Upsampling2D with nearest interpolation.
+                False for Conv2DTranspose + batch norm + activation.
+        name: prefix of the created keras model and its layers.
+    """
+    model1 = models.unet_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes, 
+                           stack_num_down=2, stack_num_up=2, 
+                           activation='ReLU', output_activation='Softmax', 
+                           batch_norm=True, pool='max', unpool='nearest')
+    
+    """    
+        ---------- (keywords of backbone options) ----------
+        backbone_name: the bakcbone model name. Should be one of the `tensorflow.keras.applications` class.
+                       None (default) means no backbone. 
+                       Currently supported backbones are:
+                       (1) VGG16, VGG19
+                       (2) ResNet50, ResNet101, ResNet152
+                       (3) ResNet50V2, ResNet101V2, ResNet152V2
+                       (4) DenseNet121, DenseNet169, DenseNet201
+                       (5) EfficientNetB[0-7]
+        weights: one of None (random initialization), 'imagenet' (pre-training on ImageNet), 
+                 or the path to the weights file to be loaded.
+        freeze_backbone: True for a frozen backbone.
+        freeze_batch_norm: False for not freezing batch normalization layers.
+    """
+
+    selection = args.number
+    model = None
+    if selection == None:
+        model = models.unet_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes, 
+                           stack_num_down=2, stack_num_up=2, 
+                           activation='ReLU', output_activation='Softmax', 
+                           batch_norm=True, pool='max', unpool='nearest')
+    elif selection == 0: # WORKS
+        model = models.att_unet_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes,
+                           stack_num_down=2, stack_num_up=2,
+                           activation='ReLU', atten_activation='ReLU', attention='add', output_activation='Softmax', 
+                           batch_norm=True, pool='max', unpool='nearest')
+    elif selection == 1: # WORKS
+        model = models.unet_plus_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes,
+                            stack_num_down=2, stack_num_up=2,
+                            activation='ReLU', output_activation='Softmax',
+                            batch_norm=True, pool='max', unpool='nearest', deep_supervision=False)
+        
+    elif selection == 2: # WORKS
+        model = models.unet_3plus_2d(input_shape, filter_num_down=[64, 128, 256, 512, 1024], n_labels=num_classes, 
+                             filter_num_skip='auto', filter_num_aggregate='auto', 
+                             stack_num_down=2, stack_num_up=2, 
+                             activation='ReLU', output_activation='Softmax',
+                             batch_norm=True, pool='max', unpool='nearest', deep_supervision=False)
+    elif selection == 3: # WORKS
+        model = models.r2_unet_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes, 
+                          stack_num_down=2, stack_num_up=2, recur_num=2,
+                          activation='ReLU', output_activation='Softmax', 
+                          batch_norm=True, pool='max', unpool='nearest')
+    elif selection == 4: # NEEDS BATCH SIZE 2
+        model = models.resunet_a_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes, 
+                            dilation_num=[1, 3, 15, 31], 
+                            aspp_num_down=256, aspp_num_up=128, 
+                            activation='ReLU', output_activation='Softmax', 
+                            batch_norm=True, pool='max', unpool='nearest')
+    elif selection == 5: # NEEDS BATCH SIZE 2
+        model = models.transunet_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes, 
+                                stack_num_down=2, stack_num_up=2,
+                                embed_dim=768, num_mlp=3072, num_heads=12, num_transformer=12,
+                                activation='ReLU', mlp_activation='ReLU', output_activation='Softmax', 
+                                batch_norm=True, pool='max', unpool='nearest')
+    elif selection == 6: # WORKS
+        model = models.swin_unet_2d(input_shape, filter_num_begin=64, n_labels=num_classes, depth=4, stack_num_down=2, stack_num_up=2, 
+                            patch_size=(2, 2), num_heads=[4, 8, 8, 8], window_size=[4, 2, 2, 2], num_mlp=512, 
+                            output_activation='Softmax', shift_window=True)
+    elif selection == 7: # WORKS
+        model = models.unet_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes, 
+                           stack_num_down=2, stack_num_up=2, 
+                           activation='ReLU', output_activation='Softmax', 
+                           batch_norm=True, pool='max', unpool='nearest',
+                           backbone='ResNet101V2', weights='imagenet', 
+                           freeze_backbone=False, freeze_batch_norm=False)
+    elif selection == 8: # WORKS
+        model = models.unet_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes, 
+                           stack_num_down=2, stack_num_up=2, 
+                           activation='ReLU', output_activation='Softmax', 
+                           batch_norm=True, pool='max', unpool='nearest',
+                           backbone='DenseNet121', weights='imagenet', 
+                           freeze_backbone=False, freeze_batch_norm=False)
+    elif selection == 9: # WORKS
+        model = models.unet_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes, 
+                           stack_num_down=2, stack_num_up=2, 
+                           activation='ReLU', output_activation='Softmax', 
+                           batch_norm=True, pool='max', unpool='nearest',
+                           backbone='ResNet101', weights='imagenet', 
+                           freeze_backbone=False, freeze_batch_norm=False)
+    elif selection == 10: # WORKS
+        model = models.unet_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes, 
+                           stack_num_down=2, stack_num_up=2, 
+                           activation='ReLU', output_activation='Softmax', 
+                           batch_norm=True, pool='max', unpool='nearest',
+                           backbone='ResNet101V2', weights=None, 
+                           freeze_backbone=False, freeze_batch_norm=False)
+    elif selection == 11: # WORKS
+        model = models.unet_2d(input_shape, filter_num=[64, 128, 256, 512, 1024], n_labels=num_classes, 
+                           stack_num_down=2, stack_num_up=2, 
+                           activation='ReLU', output_activation='Softmax', 
+                           batch_norm=True, pool='max', unpool='nearest',
+                           backbone='VGG16', weights='imagenet', 
+                           freeze_backbone=False, freeze_batch_norm=False)
+
     metrics = [sm.metrics.IOUScore(threshold=None), sm.metrics.FScore(threshold=None)]
-    model = build_unet(input_shape, num_classes)
     model.compile(
         loss=loss,
         optimizer=tf.keras.optimizers.Adam(lr),
