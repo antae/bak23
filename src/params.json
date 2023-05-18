@@ -20,5 +20,5 @@
 		"min_lr": 0.0000001
 	},
 	
-	"describtion": "base"
+	"describtion": "Dropout 0.15"
 }
