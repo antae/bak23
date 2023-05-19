@@ -21,12 +21,39 @@ def encoder_block(inputs, num_filters):
     p = MaxPool2D((2, 2))(x)
     return x, p
 
+def auto_decoder_block(inputs, num_filters):
+    x = UpSampling2D(size=(2, 2), interpolation='nearest')(inputs)
+    x = conv_block(x, num_filters)
+    return x
+
 def decoder_block(inputs, skip, num_filters):
     x = Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(inputs)
     x = UpSampling2D(size=(2, 2), interpolation='nearest')(inputs)
     x = Concatenate()([x, skip])
     x = conv_block(x, num_filters)
     return x
+
+
+def build_autoencoder(input_shape):
+    inputs = Input(input_shape)
+
+    s1, p1 = encoder_block(inputs, 64)
+    s2, p2 = encoder_block(p1, 128)
+    s3, p3 = encoder_block(p2, 256)
+    s4, p4 = encoder_block(p3, 512)
+
+    b1 = conv_block(p4, 1024)
+
+    d1 = auto_decoder_block(b1, 512)
+    d2 = auto_decoder_block(d1, 256)
+    d3 = auto_decoder_block(d2, 128)
+    d4 = auto_decoder_block(d3, 64)
+
+    outputs = Conv2D(3, 1, padding="same", activation="sigmoid")(d4)
+
+    model = Model(inputs, outputs)
+    return model
+
 
 def build_unet(input_shape, num_classes):
     inputs = Input(input_shape)
@@ -51,5 +78,5 @@ def build_unet(input_shape, num_classes):
 
 if __name__ == "__main__":
     input_shape = (512, 512, 3)
-    model = build_unet(input_shape, 11)
+    model = build_autoencoder(input_shape)
     model.summary()

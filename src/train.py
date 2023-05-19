@@ -1,49 +1,35 @@
 import os
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
 
 import numpy as np
 import cv2
 from glob import glob
 import tensorflow as tf
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping, CSVLogger, TensorBoard
-from unet import build_unet
+from unet import build_autoencoder
 from utils import load_json, timestr, create_dir, copy_file_to, save_summary
 import argparse
 import segmentation_models as sm
+from keras_unet_collection import models
 
 global image_h
 global image_w
 global num_classes
 
-def load_dataset(path, dataset_params):
-    train_size = dataset_params["train_size"]
-    valid_size = dataset_params["valid_size"]
-
-    train_x = sorted(glob(os.path.join(path, "train", "images", "*.jpg")))
-    train_y = sorted(glob(os.path.join(path, "train", "labels", "*.png")))
-    valid_x = sorted(glob(os.path.join(path, "val", "images", "*.jpg")))
-    valid_y = sorted(glob(os.path.join(path, "val", "labels", "*.png")))
-
-    if train_size != "All" and train_size >= 0 and train_size < len(train_x):
-        train_x = train_x[:train_size]
-        train_y = train_y[:train_size]
-    if valid_size != "All" and valid_size >= 0 and valid_size < len(valid_x):
-        valid_x = valid_x[:valid_size]
-        valid_y = valid_y[:valid_size]
-
-    return (train_x, train_y), (valid_x, valid_y)
-
 def read_image_mask(x, y):
     """ Image """
     x = cv2.imread(x, cv2.IMREAD_COLOR)
     x = cv2.resize(x, (image_w, image_h))
+
     x = x/255.0
     x = x.astype(np.float32)
 
-    """ Mask """
-    y = cv2.imread(y, cv2.IMREAD_GRAYSCALE)
-    y = cv2.resize(y, (image_w, image_h), interpolation=cv2.INTER_NEAREST)
-    y = y.astype(np.int32)
+    """ Image """
+    y = cv2.imread(y, cv2.IMREAD_COLOR)
+    y = cv2.resize(y, (image_w, image_h))
+
+    y = y/255.0
+    y = y.astype(np.float32)
 
     return x, y
 
@@ -53,13 +39,12 @@ def preprocess(x, y):
         y = y.decode()
         return read_image_mask(x, y)
 
-    image, mask = tf.numpy_function(f, [x, y], [tf.float32, tf.int32])
-    mask = tf.one_hot(mask, num_classes)
+    image1, image2 = tf.numpy_function(f, [x, y], [tf.float32, tf.float32])
 
-    image.set_shape([image_h, image_w, 3])
-    mask.set_shape([image_h, image_w, num_classes])
+    image1.set_shape([image_h, image_w, 3])
+    image2.set_shape([image_h, image_w, 3])
 
-    return image, mask
+    return image1, image2
 
 def tf_dataset(X, Y, batch=8):
     ds = tf.data.Dataset.from_tensor_slices((X, Y))
@@ -69,10 +54,11 @@ def tf_dataset(X, Y, batch=8):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-p', '--params', type=str, default=None)
+parser.add_argument('-n', '--number', type=int)
 args = parser.parse_args()
 
 if __name__ == "__main__":
-    config = load_json("config.json")
+    config = load_json("C:\\Projects\\bak23\\src\\config.json")
 
     """ Seeding """
     np.random.seed(42)
@@ -88,7 +74,7 @@ if __name__ == "__main__":
     create_dir(build_path)
 
     """ Hyperparameters """
-    params_path = args.params if args.params and os.path.exists(args.params) else "params.json"
+    params_path = args.params if args.params and os.path.exists(args.params) else "C:\\Projects\\bak23\\src\\params.json"
     params = load_json(params_path)
 
     image_h = params["image_h"]
@@ -105,43 +91,36 @@ if __name__ == "__main__":
     classes = config["classes"]
     
     """ Loading the dataset """
-    (train_x, train_y), (valid_x, valid_y) = load_dataset(dataset_path, params["dataset"])
-    print(f"Train: {len(train_x)}/{len(train_y)} - Valid: {len(valid_x)}/{len(valid_y)}")
+    train_x = sorted(glob(os.path.join("E:\\Datasets\\Celeb\\img_align_celeba\\*.jpg")))
+    train_y = sorted(glob(os.path.join("E:\\Datasets\\Celeb\\img_align_celeba\\*.jpg")))
+    print(f"Train: {len(train_x)}/{len(train_x)}")
     print("")
 
     """ Dataset Pipeline """
     train_ds = tf_dataset(train_x, train_y, batch=batch_size)
-    valid_ds = tf_dataset(valid_x, valid_y, batch=batch_size)
 
-    """ Model """
-    metrics = [sm.metrics.IOUScore(threshold=None), sm.metrics.FScore(threshold=None)]
-    model = build_unet(input_shape, num_classes)
+    selection = args.number
+    model = build_autoencoder(input_shape)
+
     model.compile(
-        loss=loss,
-        optimizer=tf.keras.optimizers.Adam(lr),
-        metrics=metrics
+        optimizer='adam', 
+        loss='mean_squared_error', 
+        metrics=['accuracy']
     )
 
     """ Training """
     lr_params = params["reduce_lr"]
     callbacks = [
-        ModelCheckpoint(model_path, verbose=1, save_best_only=True, monitor='val_loss'),
-        ReduceLROnPlateau(monitor='val_loss', 
-                          factor=lr_params["factor"], 
-                          patience=lr_params["patience"], 
-                          min_lr=lr_params["min_lr"], 
-                          verbose=1),
-        CSVLogger(csv_path, append=True),
-        EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=False),
-        TensorBoard(log_dir=os.path.join(build_path, "buildlog"))
+        ModelCheckpoint(model_path, verbose=1, save_best_only=False),
+        CSVLogger(csv_path, append=True)
     ]
 
     with tf.device('/GPU:0'):
         save_summary(build_path, model)
         copy_file_to(params_path, os.path.join(build_path, "params.json"))
         model.fit(train_ds,
-            validation_data=valid_ds,
             epochs=num_epochs,
             callbacks=callbacks
         )
+        model.save(os.path.join(build_path, "final_model.h5"))
 
