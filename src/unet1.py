@@ -10,7 +10,7 @@ def conv_block(inputs, num_filters, dilation_rate):
     x = BatchNormalization()(x)
     x = Activation("relu")(x)
 
-    x = Conv2D(num_filters, 3, padding="same", dilation_rate=dilation_rate)(inputs)
+    x = Conv2D(num_filters, 3, padding="same", dilation_rate=dilation_rate)(x)
     x = BatchNormalization()(x)
     x = Activation("relu")(x)
 

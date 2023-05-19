@@ -10,7 +10,7 @@ def conv_block(inputs, num_filters):
     x = BatchNormalization()(x)
     x = Activation("relu")(x)
 
-    x = SeparableConv2D(num_filters, 3, padding="same")(inputs)
+    x = SeparableConv2D(num_filters, 3, padding="same")(x)
     x = BatchNormalization()(x)
     x = Activation("relu")(x)
 

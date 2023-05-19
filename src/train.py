@@ -11,6 +11,7 @@ import unet1
 import unet2
 import unet3
 import unet4
+import unet5
 from utils import load_json, timestr, create_dir, copy_file_to, save_summary
 import argparse
 import segmentation_models as sm
@@ -119,7 +120,7 @@ if __name__ == "__main__":
 
     """ Model """
     metrics = [sm.metrics.IOUScore(threshold=None), sm.metrics.FScore(threshold=None)]
-    model = unet3.build_unet(input_shape, num_classes)
+    model = unet2.build_unet(input_shape, num_classes)
     model.compile(
         loss=loss,
         optimizer=tf.keras.optimizers.Adam(lr),
