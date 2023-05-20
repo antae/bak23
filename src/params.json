@@ -8,7 +8,7 @@
 	"loss": "categorical_crossentropy",
 	
 	"dataset": {
-		"train_size": "All",
+		"train_size":  "All",
 		"valid_size": "All",
 		"test_size": "All",
 		"test_results_size": 100
