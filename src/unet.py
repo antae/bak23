@@ -22,7 +22,7 @@ def encoder_block(inputs, num_filters):
     return x, p
 
 def decoder_block(inputs, skip, num_filters):
-    x = Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(inputs)
+    #x = Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(inputs)
     x = UpSampling2D(size=(2, 2), interpolation='nearest')(inputs)
     x = Concatenate()([x, skip])
     x = conv_block(x, num_filters)
