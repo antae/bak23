@@ -99,11 +99,13 @@ if __name__ == "__main__":
     build_path = os.path.split(model_path)[0]
     test_path = os.path.join(build_path, 'test' + timestr())
     results_path = os.path.join(test_path, 'results')
+    bad_results_path = os.path.join(test_path, 'bad_results')
     score_path = os.path.join(test_path, 'score.csv')
     cm_path = os.path.join(test_path, 'confusion_matrix.png')
 
     create_dir(test_path)
     create_dir(results_path)
+    create_dir(bad_results_path)
 
     """ Hyperparameters """
     params = load_json(os.path.join(build_path, "params.json"))
@@ -134,6 +136,7 @@ if __name__ == "__main__":
     labels = [i for i in range(num_classes)]
     test_results_size = params["dataset"]["test_results_size"]
     test_results_size = test_results_size if test_results_size != "All" else len(test_x)
+    bad_mask_count = 0
     cumulative_cm = None
     for i, [x, y] in enumerate(tqdm(zip(test_x, test_y), total=len(test_x))):
         """ Extract the name """
@@ -164,18 +167,25 @@ if __name__ == "__main__":
             save_results(image_x, mask, pred_uncert, pred, save_image_path)
 
         """ Flatten the array """
-        mask = mask.flatten()
-        pred = pred.flatten()
+        flat_mask = mask.flatten()
+        flat_pred = pred.flatten()
 
-        cm = confusion_matrix(mask, pred, labels=labels)
+        cm = confusion_matrix(flat_mask, flat_pred, labels=labels)
         if cumulative_cm is None:
             cumulative_cm = cm
         else:
             cumulative_cm = np.add(cumulative_cm, cm)
 
         """ Calculating the metrics values """
-        f1_value = f1_score(mask, pred, labels=labels, average=None, zero_division=0)
-        jac_value = jaccard_score(mask, pred, labels=labels, average=None, zero_division=0)
+        f1_value = f1_score(flat_mask, flat_pred, labels=labels, average=None, zero_division=0)
+        jac_value = jaccard_score(flat_mask, flat_pred, labels=labels, average=None, zero_division=0)
+
+        if bad_mask_count < 100: 
+            f1_mean = np.mean(f1_value)
+            if f1_mean < 0.55:
+                save_image_path = os.path.join(bad_results_path, name + '.png')
+                save_results(image_x, mask, pred_uncert, pred, save_image_path)
+                bad_mask_count += 1
         
         SCORE.append([f1_value, jac_value])
 
