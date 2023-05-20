@@ -7,7 +7,7 @@ from glob import glob
 import tensorflow as tf
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping, CSVLogger, TensorBoard
 from unet import build_unet
-from utils import load_json, timestr, create_dir, copy_file_to, save_summary
+from utils import load_json, timestr, create_dir, copy_file_to, save_summary, read_image_and_mask, MacroF1
 import argparse
 import segmentation_models as sm
 import random
@@ -22,14 +22,14 @@ def load_dataset(path, dataset_params):
 
     #train_x = sorted(glob(os.path.join(path, "train", "images", "*.jpg")) + glob(os.path.join("E:\\Datasets\\croppedLaPa\\train\\images", "*.jpg")))
     #train_y = sorted(glob(os.path.join(path, "train", "labels", "*.png")) + glob(os.path.join("E:\\Datasets\\croppedLaPa\\train\\labels", "*.png")))
-    #train_x = sorted(glob(os.path.join(path, "train", "images", "*.jpg")) + glob(os.path.join("E:\\Datasets\\patchedLaPa\\train\\images", "*.jpg")))
-    #train_y = sorted(glob(os.path.join(path, "train", "labels", "*.png")) + glob(os.path.join("E:\\Datasets\\patchedLaPa\\train\\labels", "*.png")))
-    train_x = sorted(glob(os.path.join("E:\\Datasets\\bilateralLaPa", "train", "bilateral_features", "*.jpg")))
+    train_x = sorted(glob(os.path.join(path, "train", "images", "*.jpg")) + glob(os.path.join("E:\\Datasets\\patchedLaPa\\train\\images", "*.jpg")))
+    train_y = sorted(glob(os.path.join(path, "train", "labels", "*.png")) + glob(os.path.join("E:\\Datasets\\patchedLaPa\\train\\labels", "*.png")))
+    #train_x = sorted(glob(os.path.join("E:\\Datasets\\bilateralLaPa", "train", "bilateral_features", "*.jpg")))
     #train_x = sorted(glob(os.path.join(path, "train", "images", "*.jpg")))
-    train_y = sorted(glob(os.path.join(path, "train", "labels", "*.png")))
+    #train_y = sorted(glob(os.path.join(path, "train", "labels", "*.png")))
     
-    valid_x = sorted(glob(os.path.join("E:\\Datasets\\bilateralLaPa", "val", "bilateral_features", "*.jpg")))
-    #valid_x = sorted(glob(os.path.join(path, "val", "images", "*.jpg")))
+    #valid_x = sorted(glob(os.path.join("E:\\Datasets\\bilateralLaPa", "val", "bilateral_features", "*.jpg")))
+    valid_x = sorted(glob(os.path.join(path, "val", "images", "*.jpg")))
     valid_y = sorted(glob(os.path.join(path, "val", "labels", "*.png")))
 
     if train_size != "All" and train_size >= 0 and train_size < len(train_x):
@@ -194,6 +194,7 @@ if __name__ == "__main__":
     )
 
     """ Training """
+    val_inputs, val_targets = read_image_and_mask(valid_x[:300], valid_y[:300], image_h)
     lr_params = params["reduce_lr"]
     callbacks = [
         ModelCheckpoint(model_path, verbose=1, save_best_only=True, monitor='val_loss'),
@@ -204,7 +205,8 @@ if __name__ == "__main__":
                           verbose=1),
         CSVLogger(csv_path, append=True),
         EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=False),
-        TensorBoard(log_dir=os.path.join(build_path, "buildlog"))
+        TensorBoard(log_dir=os.path.join(build_path, "buildlog")),
+        MacroF1(model, val_inputs, val_targets, os.path.join(build_path, "macrof1.csv"))
     ]
 
     with tf.device('/GPU:0'):
