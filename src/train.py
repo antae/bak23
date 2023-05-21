@@ -105,7 +105,7 @@ def preprocess(x, y):
     def f(x, y):
         x = x.decode()
         y = y.decode()
-        image, mask = read_image_mask(x, y)
+        image, mask = read_image_mask_and_add_noise(x, y)
         return image, mask
 
     image, mask = tf.numpy_function(f, [x, y], [tf.float32, tf.int32])
@@ -188,7 +188,7 @@ if __name__ == "__main__":
     metrics = [sm.metrics.IOUScore(threshold=None), sm.metrics.FScore(threshold=None)]
     model = build_unet(input_shape, num_classes)
     model.compile(
-        loss=loss,
+        loss=sm.losses.categorical_focal_dice_loss,
         optimizer=tf.keras.optimizers.Adam(lr),
         metrics=metrics
     )
@@ -217,4 +217,5 @@ if __name__ == "__main__":
             epochs=num_epochs,
             callbacks=callbacks
         )
+        model.save(os.path.join(build_path, "final_model.h5"))
 
