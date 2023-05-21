@@ -12,7 +12,7 @@ import unet2
 import unet3
 import unet4
 import unet5
-from utils import load_json, timestr, create_dir, copy_file_to, save_summary
+from utils import load_json, timestr, create_dir, copy_file_to, save_summary, read_image_and_mask, MacroF1
 import argparse
 import segmentation_models as sm
 
@@ -120,7 +120,7 @@ if __name__ == "__main__":
 
     """ Model """
     metrics = [sm.metrics.IOUScore(threshold=None), sm.metrics.FScore(threshold=None)]
-    model = unet2.build_unet(input_shape, num_classes)
+    model = unet4.build_unet(input_shape, num_classes)
     model.compile(
         loss=loss,
         optimizer=tf.keras.optimizers.Adam(lr),
@@ -128,6 +128,7 @@ if __name__ == "__main__":
     )
 
     """ Training """
+    val_inputs, val_targets = read_image_and_mask(valid_x[:500], valid_y[:500], image_h)
     lr_params = params["reduce_lr"]
     callbacks = [
         ModelCheckpoint(model_path, verbose=1, save_best_only=True, monitor='val_loss'),
@@ -138,7 +139,8 @@ if __name__ == "__main__":
                           verbose=1),
         CSVLogger(csv_path, append=True),
         EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=False),
-        TensorBoard(log_dir=os.path.join(build_path, "buildlog"))
+        TensorBoard(log_dir=os.path.join(build_path, "buildlog")),
+        MacroF1(model, val_inputs, val_targets, os.path.join(build_path, "macrof1.csv"))
     ]
 
     with tf.device('/GPU:0'):

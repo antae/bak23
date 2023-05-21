@@ -16,29 +16,42 @@ def conv_block(inputs, num_filters):
 
     return x
 
-def spp_block(inputs, pool_sizes):
-    pyramid_pooling = []
-    for pool_size in pool_sizes:
-        pooled = MaxPool2D(pool_size=pool_size, strides=1, padding='same')(inputs)
-        pyramid_pooling.append(pooled)
+def aspp_block(inputs, num_filters, dilation_rates):
+    branches = []
 
-    x = Concatenate()(pyramid_pooling)
-    x = BatchNormalization()(x)
-    x = Activation("relu")(x)
-    x = MaxPool2D((2,2))(x)
+    # Branch 1: 1x1 convolution
+    branch1 = Conv2D(num_filters, 1, activation='relu')(inputs)
+    branches.append(branch1)
 
-    return x
+    # Branches 2-4: Atrous convolutions with different dilation rates
+    for dilation_rate in dilation_rates:
+        branch = Conv2D(num_filters, 3, dilation_rate=dilation_rate, padding='same', activation='relu')(inputs)
+        branches.append(branch)
+
+    # Branch 5: Global pooling
+    branch5 = tf.reduce_mean(inputs, axis=[1, 2], keepdims=True)
+    branch5 = Conv2D(num_filters, 1, activation='relu')(branch5)
+    branch5 = tf.image.resize(branch5, tf.shape(inputs)[1:3])  # Upsample to input size
+    branches.append(branch5)
+
+    # Concatenate all branches
+    concatenated = Concatenate(axis=-1)(branches)
+
+    # Reduce the number of filters
+    output = Conv2D(num_filters, 1, activation='relu')(concatenated)
+
+    return output
 
 def encoder_block(inputs, num_filters, pool_sizes):
     x = conv_block(inputs, num_filters)
-    p = spp_block(x, pool_sizes)
+    p = MaxPool2D((2, 2))(x)
     return x, p
 
-def decoder_block(inputs, skip, num_filters):
+def decoder_block(inputs, skip, num_filters, dilation_rates):
     x = Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(inputs)
     x = UpSampling2D(size=(2, 2), interpolation='nearest')(inputs)
     x = Concatenate()([x, skip])
-    x = conv_block(x, num_filters)
+    x = aspp_block(x, num_filters, dilation_rates)
     return x
 
 def build_unet(input_shape, num_classes):
@@ -50,11 +63,11 @@ def build_unet(input_shape, num_classes):
     s4, p4 = encoder_block(p3, 512, [1, 3, 15])
 
     b1 = conv_block(p4, 1024)
-
-    d1 = decoder_block(b1, s4, 512)
-    d2 = decoder_block(d1, s3, 256)
-    d3 = decoder_block(d2, s2, 128)
-    d4 = decoder_block(d3, s1, 64)
+    
+    d1 = decoder_block(b1, s4, 512, [1, 3, 15])
+    d2 = decoder_block(d1, s3, 256, [1, 3, 15])
+    d3 = decoder_block(d2, s2, 128, [1, 3, 15, 31])
+    d4 = decoder_block(d3, s1, 64, [1, 3, 15, 31])
 
     outputs = Conv2D(num_classes, 1, padding="same", activation="softmax")(d4)
 
